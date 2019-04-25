@@ -5,8 +5,8 @@ import {
   OnDestroy,
   AfterContentChecked
 } from '@angular/core';
-import { merge, of, fromEvent, Subscription, interval } from 'rxjs';
-import { switchMap, first } from 'rxjs/operators';
+import { merge, of, fromEvent, Subscription, interval, Subject } from 'rxjs';
+import { switchMap, first, throttleTime } from 'rxjs/operators';
 
 const WARNING_AFTER = 10000;
 
@@ -22,15 +22,24 @@ export class AppComponent implements OnInit, OnDestroy, AfterContentChecked {
   constructor(private zone: NgZone) {}
 
   public ngOnInit(): void {
-    merge(
-      of(''),
-      fromEvent(document, 'click'),
-      fromEvent(document, 'mousemove'),
-      fromEvent(document, 'mousedown'),
-      fromEvent(document, 'touchstart'),
-      fromEvent(document, 'keypress'),
-      fromEvent(document, 'scroll')
-    )
+    const mouseInteractionStream = this.zone.runOutsideAngular(() => {
+      const mouseMoveSubject = new Subject();
+      merge(
+        of(''),
+        fromEvent(document, 'click'),
+        fromEvent(document, 'mousemove'),
+        fromEvent(document, 'mousedown'),
+        fromEvent(document, 'touchstart'),
+        fromEvent(document, 'keypress'),
+        fromEvent(document, 'scroll')
+      )
+        .pipe(throttleTime(1000))
+        .subscribe(mouseMoveSubject);
+
+      return mouseMoveSubject.asObservable();
+    });
+
+    mouseInteractionStream
       .pipe(switchMap(() => interval(WARNING_AFTER).pipe(first())))
       .subscribe(() => {
         window.alert('you are inactive');
